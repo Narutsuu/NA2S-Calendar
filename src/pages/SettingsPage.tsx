@@ -19,7 +19,22 @@ export default function SettingsPage() {
 
   useEffect(() => setUsername(settings.username), [settings.username]);
   const loadCats = () => supabase.from("categories").select("id,name,color").order("name").then(({ data }) => setCats((data as Category[]) ?? []));
-  useEffect(() => { loadCats(); }, []);
+  const uid = session!.user.id;
+  const [shares, setShares] = useState<{ owner_id: string; member_id: string; can_edit: boolean }[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [shEmail, setShEmail] = useState("");
+  const [shEdit, setShEdit] = useState(false);
+  const loadShares = async () => {
+    const [a, b] = await Promise.all([supabase.from("calendar_shares").select("*"), supabase.from("profiles").select("id,username")]);
+    setShares((a.data as any) ?? []);
+    setNames(Object.fromEntries((b.data ?? []).map((p: any) => [p.id, p.username || "Utilisateur"])));
+  };
+  useEffect(() => { loadCats(); loadShares(); }, []);
+  async function share() {
+    const { error } = await supabase.rpc("share_calendar", { member_email: shEmail.trim(), edit: shEdit });
+    setMsg(error ? error.message : "Calendrier partagé."); if (!error) setShEmail(""); loadShares();
+  }
+  async function unshare(o: string, m: string) { await supabase.from("calendar_shares").delete().eq("owner_id", o).eq("member_id", m); loadShares(); }
 
   async function toggleNotify(on: boolean) {
     if (on && "Notification" in window && Notification.permission === "default") await Notification.requestPermission();
@@ -87,6 +102,24 @@ export default function SettingsPage() {
             <input type="color" value={ccolor} onChange={(e) => setCcolor(e.target.value)} />
             <button className="btn" onClick={addCat}>Ajouter</button>
           </div>
+        </div>
+        <div className="card form">
+          <h2>Partage et collaboration</h2>
+          <div className="inline">
+            <input type="email" placeholder="E-mail d'un utilisateur NA2S" value={shEmail} onChange={(e) => setShEmail(e.target.value)} />
+            <label className="muted"><input type="checkbox" checked={shEdit} onChange={(e) => setShEdit(e.target.checked)} /> Peut modifier</label>
+            <button className="btn" disabled={!shEmail} onClick={share}>Partager</button>
+          </div>
+          <p className="muted">Je partage avec :</p>
+          {shares.filter((x) => x.owner_id === uid).map((x) => (
+            <div key={x.member_id} className="row"><span>{names[x.member_id] ?? "Utilisateur"} · {x.can_edit ? "modification" : "lecture"}</span>
+              <button className="chip-btn" onClick={() => unshare(uid, x.member_id)}>Retirer</button></div>
+          ))}
+          <p className="muted">Partagés avec moi :</p>
+          {shares.filter((x) => x.member_id === uid).map((x) => (
+            <div key={x.owner_id} className="row"><span>{names[x.owner_id] ?? "Utilisateur"} · {x.can_edit ? "modification" : "lecture"}</span>
+              <button className="chip-btn" onClick={() => unshare(x.owner_id, uid)}>Quitter</button></div>
+          ))}
         </div>
         <div className="card form">
           <h2>Compte</h2>

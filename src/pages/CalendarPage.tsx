@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import { supabase } from "../db/supabase";
+import TimeGrid from "../components/TimeGrid";
+import { useAuth } from "../auth/AuthContext";
 import { useSettings } from "../auth/SettingsContext";
 import { expand, type Occ } from "../utils/occurrences";
 import { addDays, addMonths, dayKey, fmtTime, label, weekday, zonedToUtc } from "../utils/tz";
@@ -9,13 +11,14 @@ import type { CalEvent, Category } from "../types";
 
 type View = "month" | "week" | "day";
 interface Form {
-  id?: string; title: string; startDay: string; endDay: string; st: string; en: string; color: string;
+  id?: string; ro?: boolean; owner?: string; title: string; startDay: string; endDay: string; st: string; en: string; color: string;
   category_id: string; location: string; description: string; recurrence: string; remind_min: string;
 }
 const blank = (day: string): Form => ({ title: "", startDay: day, endDay: day, st: "09:00", en: "10:00", color: "#7c3aed", category_id: "", location: "", description: "", recurrence: "none", remind_min: "" });
 
 export default function CalendarPage() {
   const { settings } = useSettings();
+  const me = useAuth().session!.user.id;
   const tz = settings.timezone, ws = settings.week_start;
   const today = dayKey(new Date(), tz);
   const [view, setView] = useState<View>("month");
@@ -48,9 +51,18 @@ export default function CalendarPage() {
     : view === "week" ? `${label(first, { day: "numeric", month: "short" })} – ${label(last, { day: "numeric", month: "short", year: "numeric" })}`
     : label(anchor, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [editMap, setEditMap] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    supabase.from("profiles").select("id,username").then(({ data }) => setNames(Object.fromEntries((data ?? []).map((p: any) => [p.id, p.username || "Utilisateur"]))));
+    supabase.from("calendar_shares").select("owner_id,can_edit").eq("member_id", me).then(({ data }) => setEditMap(Object.fromEntries((data ?? []).map((x: any) => [x.owner_id, x.can_edit]))));
+  }, [me]);
+  const canEdit = (ev: CalEvent) => ev.user_id === me || !!editMap[ev.user_id];
+  const plus1h = (t: string) => String((Number(t.slice(0, 2)) + 1) % 24).padStart(2, "0") + t.slice(2);
+
   function edit(ev: CalEvent) {
     setForm({
-      id: ev.id, title: ev.title, startDay: dayKey(ev.start_at, tz), endDay: dayKey(ev.end_at, tz),
+      id: ev.id, ro: !canEdit(ev), owner: ev.user_id !== me ? names[ev.user_id] ?? "un autre utilisateur" : undefined, title: ev.title, startDay: dayKey(ev.start_at, tz), endDay: dayKey(ev.end_at, tz),
       st: fmtTime(ev.start_at, tz), en: fmtTime(ev.end_at, tz), color: ev.color, category_id: ev.category_id ?? "",
       location: ev.location ?? "", description: ev.description ?? "", recurrence: ev.recurrence,
       remind_min: ev.remind_min == null ? "" : String(ev.remind_min),
@@ -79,7 +91,7 @@ export default function CalendarPage() {
   }
   async function drop(k: string) {
     const o = drag.current; drag.current = null;
-    if (!o) return;
+    if (!o || !canEdit(o.ev)) return;
     const delta = Math.round((new Date(k + "T00:00:00Z").getTime() - new Date(o.startKey + "T00:00:00Z").getTime()) / 86400000);
     if (!delta) return;
     const mv = (iso: string) => zonedToUtc(addDays(dayKey(iso, tz), delta), fmtTime(iso, tz), tz).toISOString();
@@ -99,24 +111,30 @@ export default function CalendarPage() {
           <button key={v} className={"chip-btn" + (view === v ? " on" : "")} onClick={() => setView(v)}>{v === "month" ? "Mois" : v === "week" ? "Semaine" : "Jour"}</button>
         ))}
       </div>
-      <div className={"cal" + (view === "day" ? " one" : "")}>
-        {view === "month" && cells.slice(0, 7).map((k) => <div key={k} className="cal-head">{label(k, { weekday: "short" })}</div>)}
-        {cells.map((k) => (
-          <div key={k} className={"cal-cell" + (view === "month" && k.slice(0, 7) !== anchor.slice(0, 7) ? " other" : "") + (k === today ? " today" : "")}
-            onClick={() => { setForm(blank(k)); setErr(""); }} onDragOver={(e) => e.preventDefault()} onDrop={() => drop(k)}>
-            <span>{view === "month" ? Number(k.slice(8)) : label(k, { weekday: "short", day: "numeric" })}</span>
-            {occs.filter((o) => o.startKey <= k && k <= o.endKey).slice(0, view === "month" ? 3 : 99).map((o, i) => (
-              <div key={o.ev.id + i} className="chip" draggable style={{ background: o.ev.color }}
-                onDragStart={() => (drag.current = o)} onClick={(e) => { e.stopPropagation(); edit(o.ev); }}>
-                {o.startKey === k ? fmtTime(o.startIso, tz) + " " : "↔ "}{o.ev.title}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
+      {view === "month" ? (
+        <div className="cal">
+          {cells.slice(0, 7).map((k) => <div key={k} className="cal-head">{label(k, { weekday: "short" })}</div>)}
+          {cells.map((k) => (
+            <div key={k} className={"cal-cell" + (k.slice(0, 7) !== anchor.slice(0, 7) ? " other" : "") + (k === today ? " today" : "")}
+              onClick={() => { setForm(blank(k)); setErr(""); }} onDragOver={(e) => e.preventDefault()} onDrop={() => drop(k)}>
+              <span>{Number(k.slice(8))}</span>
+              {occs.filter((o) => o.startKey <= k && k <= o.endKey).slice(0, 3).map((o, i) => (
+                <div key={o.ev.id + i} className="chip" draggable style={{ "--c": o.ev.color } as CSSProperties}
+                  onDragStart={() => (drag.current = o)} onClick={(e) => { e.stopPropagation(); edit(o.ev); }}>
+                  {o.startKey === k ? fmtTime(o.startIso, tz) + " " : "↔ "}{o.ev.title}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <TimeGrid cells={cells} occs={occs} tz={tz} today={today}
+          onNew={(d, t) => { setForm({ ...blank(d), st: t, en: plus1h(t) }); setErr(""); }} onEdit={(o) => edit(o.ev)} />
+      )}
       {form && (
         <form className="card form" style={{ marginTop: 14 }} onSubmit={save}>
           <h2>{form.id ? "Modifier l'événement" : "Nouvel événement"}</h2>
+          <fieldset className="fs" disabled={form.ro}>
           <input required placeholder="Titre" value={form.title} onChange={(e) => set({ title: e.target.value })} />
           <div className="inline">
             <input type="date" value={form.startDay} onChange={(e) => set({ startDay: e.target.value, endDay: e.target.value > form.endDay ? e.target.value : form.endDay })} />
@@ -142,11 +160,13 @@ export default function CalendarPage() {
           </div>
           <input placeholder="Lieu (facultatif)" value={form.location} onChange={(e) => set({ location: e.target.value })} />
           <input placeholder="Description (facultatif)" value={form.description} onChange={(e) => set({ description: e.target.value })} />
+          </fieldset>
+          {form.owner && <p className="muted">Calendrier de {form.owner}{form.ro ? " (lecture seule)" : ""}</p>}
           {err && <p className="muted">{err}</p>}
           <div className="inline">
-            <button className="btn" type="submit">Enregistrer</button>
+            {!form.ro && <button className="btn" type="submit">Enregistrer</button>}
             <button className="chip-btn" type="button" onClick={() => setForm(null)}>Annuler</button>
-            {form.id && <button className="chip-btn" type="button" onClick={del}>Supprimer</button>}
+            {form.id && !form.ro && <button className="chip-btn" type="button" onClick={del}>Supprimer</button>}
           </div>
           <p className="muted">Heures affichées dans le fuseau : {tz}. Glissez un événement sur un autre jour pour le déplacer.</p>
         </form>

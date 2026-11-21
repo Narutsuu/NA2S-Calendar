@@ -124,3 +124,20 @@ button { font: inherit; cursor: pointer; border: 0; }
 .cal-cell[draggable], .chip[draggable] { cursor: grab; }
 .toasts { position: fixed; right: 16px; top: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
 .toast { background: var(--surface-2); border: 1px solid var(--primary); border-radius: 10px; padding: 12px 16px; font-size: 14px; cursor: pointer; animation: fade 0.25s ease; }
+
+.fs { border: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.chip { background: color-mix(in srgb, var(--c) 24%, var(--surface)); border: 1px solid color-mix(in srgb, var(--c) 60%, transparent); color: var(--text); border-radius: 6px; }
+.cal { border-radius: 14px; }
+.cal-cell { background: var(--surface); }
+.cal-cell.other { background: var(--bg); }
+.tg { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.tg-head { display: grid; gap: 6px; padding: 10px 10px 10px 0; border-bottom: 1px solid var(--border); }
+.tg-day { text-align: center; padding: 8px 0; border-radius: 10px; background: var(--bg); font-size: 13px; text-transform: capitalize; }
+.tg-day.today { background: #fff; color: #08060d; font-weight: 600; }
+.tg-body { max-height: 62vh; overflow: auto; }
+.tg-grid { display: grid; }
+.tg-hours div { font-size: 11px; color: var(--muted); text-align: right; padding-right: 8px; }
+.tg-col { position: relative; border-left: 1px solid var(--border); cursor: pointer; background-image: linear-gradient(var(--border) 1px, transparent 1px); background-size: 100% 48px; }
+.tg-ev { position: absolute; left: 3px; right: 3px; border-radius: 10px; padding: 4px 8px; font-size: 12px; overflow: hidden; background: color-mix(in srgb, var(--c) 88%, #000); color: #fff; display: flex; flex-direction: column; cursor: pointer; transition: transform var(--ease); }
+.tg-ev:hover { transform: scale(1.01); }
+.tg-ev span { opacity: 0.85; font-size: 11px; }
