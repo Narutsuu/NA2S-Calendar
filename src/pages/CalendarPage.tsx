@@ -170,7 +170,8 @@ export default function CalendarPage() {
           onNew={(d, t) => { setForm({ ...blank(d), st: t, en: plus1h(t) }); setErr(""); }} onEdit={(o) => edit(o.ev)} />
       )}
       {form && (
-        <form className="card form" style={{ marginTop: 14 }} onSubmit={save}>
+        <div className="backdrop" onClick={() => setForm(null)}>
+        <form className="card form modal" onClick={(e) => e.stopPropagation()} onSubmit={save}>
           <h2>{form.id ? "Modifier l'événement" : "Nouvel événement"}</h2>
           <fieldset className="fs" disabled={form.ro}>
           <input required placeholder="Titre" value={form.title} onChange={(e) => set({ title: e.target.value })} />
@@ -208,6 +209,7 @@ export default function CalendarPage() {
           </div>
           <p className="muted">Heures affichées dans le fuseau : {tz}. Glissez un événement sur un autre jour pour le déplacer.</p>
         </form>
+        </div>
       )}
         </section>
       </div>
