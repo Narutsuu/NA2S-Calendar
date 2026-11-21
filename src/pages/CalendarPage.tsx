@@ -100,17 +100,55 @@ export default function CalendarPage() {
   }
   const set = (p: Partial<Form>) => setForm((f) => (f ? { ...f, ...p } : f));
 
+  const m1 = anchor.slice(0, 8) + "01";
+  const miniStart = addDays(m1, -((weekday(m1) - ws + 7) % 7));
+  const miniCells = Array.from({ length: 42 }, (_, i) => addDays(miniStart, i));
+  const dayOccs = occs.filter((o) => o.startKey <= anchor && anchor <= o.endKey);
+
   return (
     <>
-      <PageHeader title="Calendrier" subtitle={title} />
-      <div className="toolbar">
-        <button className="icon-btn" onClick={() => nav(-1)}><ChevronLeft size={18} /></button>
-        <button className="btn" onClick={() => setAnchor(today)}>Aujourd'hui</button>
-        <button className="icon-btn" onClick={() => nav(1)}><ChevronRight size={18} /></button>
-        {(["month", "week", "day"] as View[]).map((v) => (
-          <button key={v} className={"chip-btn" + (view === v ? " on" : "")} onClick={() => setView(v)}>{v === "month" ? "Mois" : v === "week" ? "Semaine" : "Jour"}</button>
-        ))}
-      </div>
+      <h1 className="cal-title">Calendrier</h1>
+      <div className="cal-layout">
+        <aside className="cal-side">
+          <div className="card">
+            <div className="mini-head">
+              <b>{label(anchor, { month: "long", year: "numeric" })}</b>
+              <span>
+                <button className="icon-btn" onClick={() => setAnchor(addMonths(anchor, -1))}><ChevronLeft size={16} /></button>{" "}
+                <button className="icon-btn" onClick={() => setAnchor(addMonths(anchor, 1))}><ChevronRight size={16} /></button>
+              </span>
+            </div>
+            <div className="mini">
+              {miniCells.slice(0, 7).map((k) => <div key={k} className="mini-wd">{label(k, { weekday: "narrow" })}</div>)}
+              {miniCells.map((k) => (
+                <button key={k} className={"mini-d" + (k.slice(0, 7) !== anchor.slice(0, 7) ? " other" : "") + (k === today ? " today" : "") + (k === anchor ? " sel" : "")} onClick={() => setAnchor(k)}>
+                  {Number(k.slice(8))}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <h2>Événements du {label(anchor, { day: "numeric", month: "long" })}</h2>
+            {dayOccs.length === 0 && <p className="muted">Aucun événement ce jour.</p>}
+            {dayOccs.map((o, i) => (
+              <div key={o.ev.id + i} className="up-ev" style={{ "--c": o.ev.color } as CSSProperties} onClick={() => edit(o.ev)}>
+                <b>{o.ev.title}</b>
+                <span>{fmtTime(o.startIso, tz)} – {fmtTime(o.endIso, tz)}</span>
+              </div>
+            ))}
+          </div>
+        </aside>
+        <section className="cal-main">
+          <div className="cal-bar">
+            <select value={view} onChange={(e) => setView(e.target.value as View)}>
+              <option value="month">Mois</option><option value="week">Semaine</option><option value="day">Jour</option>
+            </select>
+            <span className="cal-bar-title">{title}</span>
+            <button className="bar-btn" onClick={() => setAnchor(today)}>Aujourd'hui</button>
+            <button className="bar-btn" onClick={() => nav(-1)}><ChevronLeft size={16} /></button>
+            <button className="bar-btn" onClick={() => nav(1)}><ChevronRight size={16} /></button>
+            <button className="bar-btn add" onClick={() => { setForm(blank(anchor)); setErr(""); }}>+ Ajouter</button>
+          </div>
       {view === "month" ? (
         <div className="cal">
           {cells.slice(0, 7).map((k) => <div key={k} className="cal-head">{label(k, { weekday: "short" })}</div>)}
@@ -171,6 +209,8 @@ export default function CalendarPage() {
           <p className="muted">Heures affichées dans le fuseau : {tz}. Glissez un événement sur un autre jour pour le déplacer.</p>
         </form>
       )}
+        </section>
+      </div>
     </>
   );
 }
